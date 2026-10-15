@@ -8,15 +8,18 @@ CoinGecko API, validates them (Pydantic + Pandera), loads them into PostgreSQL (
 transforms them with dbt (returns, rolling volatility, drawdown) and logs every run and
 quality check. The whole run is a Prefect flow with retries.
 
-Work in progress: dashboard and volatility forecast are next. Full write-up to follow.
+**Live dashboard:** DASHBOARD_URL (Streamlit, reading Neon through a read-only login)
+
+Work in progress: the volatility forecast is next. Full write-up to follow.
 
 ## Run it locally
 
 ```bash
 docker compose up -d                      # local Postgres
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt && pip install -e .
+pip install -r requirements.txt -r dashboard/requirements.txt && pip install -e .
 cp .env.example .env                      # then paste your CoinGecko Demo key
-python -m pytest                          # 45 tests
+python -m pytest                          # 52 tests
 python -m crypto_pipeline.flow            # fetch -> check -> load -> dbt build
+streamlit run dashboard/app.py            # dashboard on http://localhost:8501
 ```

@@ -11,3 +11,5 @@ transform/logs/
 transform/dbt_packages/
 transform/.user.yml
 .neon-url
+.neon-reader-url
+.streamlit/secrets.toml

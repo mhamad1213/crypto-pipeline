@@ -12,10 +12,11 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["dashboard"]  # lets tests import the dashboard's queries.py
 
 [tool.ruff]
 line-length = 100
-src = ["src"]
+src = ["src", "dashboard"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

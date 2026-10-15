@@ -22,9 +22,9 @@ jobs:
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -44,7 +44,7 @@ jobs:
 
       - name: Keep the raw API responses
         if: always()  # even on failure, so you can see what CoinGecko sent
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: raw-json-${{ github.run_number }}
           path: data/raw/
