@@ -105,7 +105,7 @@ with overview:
         "Index (start = 100)",
     )
     fig.add_hline(y=100, line_dash="dot", line_color="grey", opacity=0.6)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     table = summary[
         [
@@ -132,7 +132,7 @@ with overview:
     st.dataframe(
         table.style.format({"Price": gbp, VOL: "{:.1%}", **{c: "{:+.1%}" for c in signed}}),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
     st.caption(
         "Volatility = how much daily returns jump around (standard deviation of the last 30 "
@@ -165,16 +165,16 @@ with detail:
     )
     price.update_traces(line={"width": 2})
     price.update_layout(hovermode="x unified", margin={"t": 50, "b": 10})
-    st.plotly_chart(price, use_container_width=True)
+    st.plotly_chart(price, width="stretch")
 
     left, right = st.columns(2)
     vol = line_chart(coin, "volatility_30d_annualised", "Volatility (30-day, annualised)", "", True)
     vol.update_layout(showlegend=False)
-    left.plotly_chart(vol, use_container_width=True)
+    left.plotly_chart(vol, width="stretch")
     dd = line_chart(coin, "drawdown", "Drop from previous peak", "", True)
     dd.update_traces(fill="tozeroy")
     dd.update_layout(showlegend=False)
-    right.plotly_chart(dd, use_container_width=True)
+    right.plotly_chart(dd, width="stretch")
 
 # ---------------------------------------------------------------- Pipeline health
 with pipeline:
@@ -205,7 +205,7 @@ with pipeline:
             "Error": runs["error"].fillna("").str.slice(0, 90),
         }
     )
-    st.dataframe(shown, hide_index=True, use_container_width=True)
+    st.dataframe(shown, hide_index=True, width="stretch")
 
     st.subheader("Quality checks from the latest run")
     st.dataframe(
@@ -218,7 +218,7 @@ with pipeline:
             }
         ),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
     st.caption(
         "Batch checks run before loading (bad data never reaches the table), table checks "
