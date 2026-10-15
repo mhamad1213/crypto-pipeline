@@ -8,7 +8,7 @@ CoinGecko API, validates them (Pydantic + Pandera), loads them into PostgreSQL (
 transforms them with dbt (returns, rolling volatility, drawdown) and logs every run and
 quality check. The whole run is a Prefect flow with retries.
 
-**Live dashboard:** DASHBOARD_URL (Streamlit, reading Neon through a read-only login)
+**Live dashboard:** https://your-app.streamlit.app (Streamlit, reading Neon through a read-only login)
 
 Work in progress: the volatility forecast is next. Full write-up to follow.
 
