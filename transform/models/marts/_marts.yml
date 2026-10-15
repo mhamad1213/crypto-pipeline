@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: fct_daily_metrics
+    description: One row per coin per day with returns, moving averages, volatility and drawdown.
+    columns:
+      - name: coin_day_key
+        description: coin_id and date joined together, so uniqueness is one simple test.
+        data_tests: [unique, not_null]
+      - name: daily_return
+        description: Price change vs the day before (0.05 = +5%). Empty on each coin's first day.
+        data_tests:
+          - between:
+              arguments: {min_value: -0.5, max_value: 0.5}  # same rule as the Pandera check
+      - name: volatility_30d
+        description: Standard deviation of daily log returns over the last 30 days.
+        data_tests:
+          - between:
+              arguments: {min_value: 0}
+      - name: drawdown
+        description: How far below its highest price so far (0 = at the peak, -0.4 = 40% below).
+        data_tests:
+          - not_null
+          - between:
+              arguments: {min_value: -1, max_value: 0}
+
+  - name: coin_summary
+    description: One row per coin with the latest headline numbers.
+    columns:
+      - name: coin_id
+        data_tests: [unique, not_null]
+      - name: max_drawdown
+        data_tests:
+          - between:
+              arguments: {min_value: -1, max_value: 0}

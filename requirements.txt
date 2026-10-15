@@ -1,0 +1,12 @@
+requests==2.34.2
+pydantic==2.14.1
+python-dotenv==1.2.4
+SQLAlchemy==2.1.4
+psycopg[binary]==3.3.6
+pandas>=2.2
+pandera>=0.24
+dbt-core==1.12.6
+dbt-postgres==1.11.0
+prefect==3.8.8
+pytest==9.1.1
+ruff==0.17.0

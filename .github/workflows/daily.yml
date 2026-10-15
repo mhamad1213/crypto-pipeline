@@ -1,0 +1,52 @@
+# The daily pipeline: fetch from CoinGecko, check, load into Neon, dbt build.
+# Runs by itself every morning, and can be started by hand from the Actions tab.
+name: Daily pipeline
+
+on:
+  schedule:
+    - cron: "17 6 * * *"  # 06:17 UTC every day (07:17 UK summer time). GitHub may start it late.
+  workflow_dispatch:  # adds a "Run workflow" button
+
+concurrency:
+  group: daily-pipeline  # never two runs writing to the database at once
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Check secrets are set
+        run: |
+          test -n "$COINGECKO_API_KEY" || { echo "::error::Secret COINGECKO_API_KEY is missing"; exit 1; }
+          test -n "$DATABASE_URL" || { echo "::error::Secret DATABASE_URL is missing"; exit 1; }
+
+      - name: Run the pipeline
+        run: python -m crypto_pipeline.flow
+
+      - name: Keep the raw API responses
+        if: always()  # even on failure, so you can see what CoinGecko sent
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-json-${{ github.run_number }}
+          path: data/raw/
+          retention-days: 30
+          if-no-files-found: ignore

@@ -1,0 +1,1 @@
+"""Daily crypto data pipeline."""

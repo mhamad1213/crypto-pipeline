@@ -1,0 +1,14 @@
+name: crypto
+version: "1.0.0"
+profile: crypto  # which connection in profiles.yml to use
+
+model-paths: ["models"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  crypto:
+    staging:
+      +materialized: view   # cheap: just a saved query over the raw table
+    marts:
+      +materialized: table  # rebuilt on every run, fast to read for the dashboard

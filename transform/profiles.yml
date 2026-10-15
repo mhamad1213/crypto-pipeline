@@ -1,0 +1,16 @@
+# Where dbt connects. Values come from environment variables, with defaults that
+# match docker-compose.yml, so it works locally with no setup. The flow fills these
+# in from DATABASE_URL (config.dbt_env), so pointing DATABASE_URL at Neon moves dbt too.
+crypto:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_PORT', '5432') | int }}"
+      user: "{{ env_var('DBT_USER', 'crypto') }}"
+      password: "{{ env_var('DBT_PASSWORD', 'crypto') }}"
+      dbname: "{{ env_var('DBT_DBNAME', 'crypto') }}"
+      sslmode: "{{ env_var('DBT_SSLMODE', 'prefer') }}"  # Neon needs "require"
+      schema: analytics  # dbt builds everything here, separate from the raw tables
+      threads: 4

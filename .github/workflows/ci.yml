@@ -1,0 +1,49 @@
+# Runs on every push and pull request: lint, check the dbt project parses, run all tests
+# against a throwaway Postgres that GitHub starts next to the job.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: crypto
+          POSTGRES_PASSWORD: crypto
+          POSTGRES_DB: crypto
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crypto"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: dbt parse (catches broken SQL/Jinja without touching data)
+        run: dbt parse --project-dir transform --profiles-dir transform
+
+      - name: Tests
+        run: python -m pytest -q
