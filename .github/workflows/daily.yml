@@ -1,4 +1,4 @@
-# The daily pipeline: fetch from CoinGecko, check, load into Neon, dbt build.
+# The daily pipeline: fetch from CoinGecko, check, load into Neon, dbt build, forecast.
 # Runs by itself every morning, and can be started by hand from the Actions tab.
 name: Daily pipeline
 
@@ -44,7 +44,7 @@ jobs:
 
       - name: Keep the raw API responses
         if: always()  # even on failure, so you can see what CoinGecko sent
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: raw-json-${{ github.run_number }}
           path: data/raw/
