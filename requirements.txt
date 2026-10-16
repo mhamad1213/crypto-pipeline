@@ -9,4 +9,5 @@ dbt-core==1.12.6
 dbt-postgres==1.11.0
 prefect==3.8.8
 pytest==9.1.1
+scikit-learn==1.9.1
 ruff==0.17.0

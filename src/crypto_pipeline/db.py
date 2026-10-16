@@ -70,6 +70,34 @@ quality_results = Table(
 )
 
 
+# Milestone 8: volatility forecasts. kind = "backtest" (walk-forward test, rebuilt every run)
+# or "live" (a real forecast made on made_on, written once, actual filled in 7 days later).
+predictions = Table(
+    "predictions",
+    metadata,
+    Column("coin_id", String(50), ForeignKey("coins.coin_id"), primary_key=True),
+    Column("made_on", Date, primary_key=True),
+    Column("kind", String(10), primary_key=True),
+    Column("model", String(20), nullable=False),
+    Column("predicted_vol", Float, nullable=False),  # annualised, e.g. 0.45 = 45%
+    Column("naive_vol", Float, nullable=False),
+    Column("actual_vol", Float),  # empty until the 7 days have happened
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+forecast_evaluations = Table(
+    "forecast_evaluations",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("run_id", Integer, ForeignKey("pipeline_runs.run_id")),  # empty for manual runs
+    Column("evaluated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("model", String(20), nullable=False),
+    Column("mae", Float, nullable=False),
+    Column("vs_naive", Float, nullable=False),
+    Column("n", Integer, nullable=False),
+)
+
+
 def get_engine(url: str | None = None, **kwargs) -> Engine:
     return create_engine(url or config.get_database_url(), **kwargs)
 

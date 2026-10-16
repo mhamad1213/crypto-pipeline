@@ -15,6 +15,11 @@ import queries
 st.set_page_config(page_title="Crypto Pipeline Dashboard", page_icon="📈", layout="wide")
 
 VOL = "Volatility (30d, annualised)"
+MODEL_NAMES = {
+    "har_ridge": "HAR model (used for forecasts)",
+    "naive": "Naive: same as last 7 days",
+    "boosting": "Gradient boosting",
+}
 STATUS = {"success": "✅ success", "failed": "❌ failed", "running": "⏳ running"}
 
 
@@ -42,6 +47,8 @@ def load() -> dict:
         "runs": queries.recent_runs(eng),
         "checks": queries.latest_checks(eng),
         "rows": queries.total_rows(eng),
+        "forecasts": queries.forecasts(eng),
+        "evaluation": queries.latest_evaluation(eng),
     }
 
 
@@ -83,7 +90,9 @@ st.caption(
     f"checked, and transformed with dbt. Latest data: **{latest_day:%d %b %Y}** (00:00 UTC)."
 )
 
-overview, detail, pipeline = st.tabs(["Overview", "Coin detail", "Pipeline health"])
+overview, detail, outlook, pipeline = st.tabs(
+    ["Overview", "Coin detail", "Volatility forecast", "Pipeline health"]
+)
 
 # ---------------------------------------------------------------- Overview
 with overview:
@@ -142,7 +151,7 @@ with overview:
 
 # ---------------------------------------------------------------- Coin detail
 with detail:
-    symbol = st.selectbox("Coin", queries.COIN_ORDER)
+    symbol = st.selectbox("Coin", queries.COIN_ORDER, key="detail_coin")
     coin = metrics[metrics["symbol"] == symbol]
     colour = queries.COIN_COLOURS[symbol]
 
@@ -175,6 +184,78 @@ with detail:
     dd.update_traces(fill="tozeroy")
     dd.update_layout(showlegend=False)
     right.plotly_chart(dd, width="stretch")
+
+# ---------------------------------------------------------------- Volatility forecast
+with outlook:
+    fc, evaluation = d["forecasts"], d["evaluation"]
+    if fc.empty:
+        st.info("No forecasts yet: they appear after the next pipeline run.")
+    else:
+        newest = fc[fc["kind"] == "live"].sort_values("made_on").groupby("symbol").last()
+        st.markdown(
+            "**How much will each coin jump around over the next 7 days?** "
+            "Forecast annualised volatility, compared with the last 7 days."
+        )
+        cols = st.columns(len(newest))
+        for col, sym in zip(cols, [s for s in queries.COIN_ORDER if s in newest.index]):
+            row = newest.loc[sym]
+            col.metric(
+                sym,
+                f"{row.predicted_vol:.0%}",
+                f"{(row.predicted_vol - row.naive_vol) * 100:+.0f} pts vs last 7 days",
+                delta_color="off",  # calmer or wilder isn't "good" or "bad"
+            )
+
+        symbol = st.selectbox("Coin", queries.COIN_ORDER, key="forecast_coin")
+        coin = fc[fc["symbol"] == symbol].melt(
+            id_vars="made_on",
+            value_vars=["actual_vol", "predicted_vol", "naive_vol"],
+            var_name="series",
+        )
+        names = {
+            "actual_vol": "What happened",
+            "predicted_vol": "Model forecast",
+            "naive_vol": "Naive: same as last 7 days",
+        }
+        chart = px.line(
+            coin.replace(names),
+            x="made_on",
+            y="value",
+            color="series",
+            color_discrete_map={
+                names["actual_vol"]: "#52514e",
+                names["predicted_vol"]: queries.COIN_COLOURS[symbol],
+                names["naive_vol"]: "#b5b3ab",
+            },
+            labels={"made_on": "Forecast made on", "value": "", "series": ""},
+            title=f"{symbol}: forecast vs what actually happened over the next 7 days",
+        )
+        chart.update_traces(line={"width": 2})
+        chart.update_traces(selector={"name": names["naive_vol"]}, line={"dash": "dot"})
+        chart.update_yaxes(tickformat=".0%")
+        chart.update_layout(hovermode="x unified", margin={"t": 50, "b": 10})
+        st.plotly_chart(chart, width="stretch")
+
+        if not evaluation.empty:
+            st.subheader("Is the model better than the naive guess?")
+            st.dataframe(
+                pd.DataFrame(
+                    {
+                        "Model": evaluation["model"].map(MODEL_NAMES).fillna(evaluation["model"]),
+                        "Average error": evaluation["mae"] * 100,
+                        "vs naive": evaluation["vs_naive"],
+                        "Forecasts tested": evaluation["n"],
+                    }
+                ).style.format({"Average error": "{:.1f} pts", "vs naive": "{:+.0%}"}),
+                hide_index=True,
+                width="stretch",
+            )
+        st.caption(
+            "Walk-forward test: the model is retrained every 30 days on past data only and "
+            "scored on the following month, so it never sees the answer. Average error is in "
+            "volatility points (a forecast of 50% when 60% happened = 10 points). The line "
+            "stops 7 days ago because the answer for later forecasts isn't known yet."
+        )
 
 # ---------------------------------------------------------------- Pipeline health
 with pipeline:

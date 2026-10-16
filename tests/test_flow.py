@@ -60,10 +60,24 @@ def test_flow_records_dbt_success(setup, monkeypatch):
     monkeypatch.setattr(
         pipeline, "dbtRunner", lambda: FakeDbt(True, ["success"] * 4 + ["pass"] * 20)
     )
+    monkeypatch.setattr(pipeline.forecast, "run", lambda engine, run_id: "5 new forecasts")
     result = pipeline.daily_pipeline(["bitcoin"], from_raw=True, today=TODAY)
     assert result["dbt"] == "pass=20, success=4"
+    assert result["forecast"] == "5 new forecasts"
     _, checks = runs_and_checks(setup)
-    assert ("dbt", True) in checks
+    assert ("dbt", True) in checks and ("forecast", True) in checks
+
+
+def test_forecast_failure_fails_the_run(setup, monkeypatch):
+    def broken(engine, run_id):
+        raise ValueError("need more than 120 days of history, have 30")
+
+    monkeypatch.setattr(pipeline, "dbtRunner", lambda: FakeDbt(True, ["success"]))
+    monkeypatch.setattr(pipeline.forecast, "run", broken)
+    with pytest.raises(ValueError, match="120 days"):
+        pipeline.daily_pipeline(["bitcoin"], from_raw=True, today=TODAY)
+    runs, _ = runs_and_checks(setup)
+    assert runs[0].status == "failed" and "ValueError" in runs[0].error
 
 
 def test_dbt_failure_fails_the_run(setup, monkeypatch):

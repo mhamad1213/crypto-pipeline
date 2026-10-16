@@ -100,6 +100,50 @@ def dashboard_db(engine, monkeypatch):
                 {"run_id": 2, "stage": "table", "check_name": "data_is_fresh", "passed": True},
             ],
         )
+        day = date(2026, 10, 1)
+        conn.execute(
+            insert(db.predictions),
+            [
+                # backtest and live for the same day: the dashboard must show the live one
+                {
+                    "coin_id": "bitcoin",
+                    "made_on": day,
+                    "kind": "backtest",
+                    "model": "har_ridge",
+                    "predicted_vol": 0.30,
+                    "naive_vol": 0.25,
+                    "actual_vol": 0.35,
+                },
+                {
+                    "coin_id": "bitcoin",
+                    "made_on": day,
+                    "kind": "live",
+                    "model": "har_ridge",
+                    "predicted_vol": 0.32,
+                    "naive_vol": 0.25,
+                    "actual_vol": 0.35,
+                },
+            ]
+            + [
+                {
+                    "coin_id": coin,
+                    "made_on": day + timedelta(days=7),
+                    "kind": "live",
+                    "model": "har_ridge",
+                    "predicted_vol": 0.40 + i / 10,
+                    "naive_vol": 0.30,
+                    "actual_vol": None,
+                }
+                for i, coin in enumerate(SYMBOLS)
+            ],
+        )
+        conn.execute(
+            insert(db.forecast_evaluations),
+            [
+                {"model": "naive", "mae": 0.33, "vs_naive": 0.0, "n": 1040},
+                {"model": "har_ridge", "mae": 0.30, "vs_naive": -0.094, "n": 1040},
+            ],
+        )
     return engine
 
 
@@ -148,12 +192,32 @@ def test_queries_read_the_tables(dashboard_db):
     assert queries.total_rows(dashboard_db) == 0
 
 
+def test_forecast_queries(dashboard_db):
+    fc = queries.forecasts(dashboard_db)
+    assert len(fc) == 1 + 5  # one row per coin-day: live wins over backtest
+    first = fc[fc["made_on"] == "2026-10-01"].iloc[0]
+    assert (first.kind, first.predicted_vol) == ("live", 0.32)
+    assert fc["actual_vol"].isna().sum() == 5  # the newest 7 days haven't happened yet
+    assert list(queries.latest_evaluation(dashboard_db)["model"]) == ["har_ridge", "naive"]
+
+
+def test_forecast_queries_before_first_forecast(engine, monkeypatch):
+    with engine.connect() as conn:
+        monkeypatch.setenv(
+            "DASHBOARD_RAW_SCHEMA", conn.execute(text("SELECT current_schema()")).scalar_one()
+        )
+    assert queries.forecasts(engine).empty  # no tables yet: empty, not a crash
+    assert queries.latest_evaluation(engine).empty
+
+
 def test_app_renders_without_errors(dashboard_db):
     at = AppTest.from_file("../dashboard/app.py", default_timeout=60).run()
     assert not at.exception
     assert [m.label for m in at.metric][:5] == queries.COIN_ORDER
     assert at.metric[0].value == "£61,682.00"
     assert at.metric[4].value == "£0.1700"
-    health = {m.label: m.value for m in at.metric[5:]}
+    outlook = {m.label: m.value for m in at.metric[5:10]}
+    assert outlook == {"BTC": "40%", "ETH": "50%", "SOL": "60%", "XRP": "70%", "ADA": "80%"}
+    health = {m.label: m.value for m in at.metric[10:]}
     assert health["Last run"] == "❌ failed"
     assert health["Checks passed (latest run)"] == "1 / 2"

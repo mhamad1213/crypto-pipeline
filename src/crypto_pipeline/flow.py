@@ -1,6 +1,7 @@
-"""Milestone 5: the whole pipeline as one Prefect flow.
+"""The whole pipeline as one Prefect flow.
 
     extract (per coin, with retries) -> batch checks -> load -> table checks -> dbt build
+    -> volatility forecast (milestone 8)
 
 Run with:  python -m crypto_pipeline.flow               (live API, then everything)
            python -m crypto_pipeline.flow --from-raw    (saved JSON instead of the API)
@@ -19,7 +20,7 @@ from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 from sqlalchemy.engine import Engine
 
-from crypto_pipeline import config, db, extract, load, quality
+from crypto_pipeline import config, db, extract, forecast, load, quality
 from crypto_pipeline.coingecko import CoinGeckoClient, PermanentCoinGeckoError
 from crypto_pipeline.models import DailyPrice
 
@@ -99,6 +100,14 @@ def dbt_build(engine: Engine, run_id: int) -> str:
     return summary
 
 
+@task(cache_policy=NO_CACHE)
+def forecast_volatility(engine: Engine, run_id: int) -> str:
+    """Re-test the model against the naive baseline, then store today's forecasts."""
+    summary = forecast.run(engine, run_id)
+    quality.record(engine, run_id, [quality.CheckResult("forecast", "forecast", True, summary)])
+    return summary
+
+
 @flow(name="daily-crypto-pipeline", log_prints=True)
 def daily_pipeline(
     coins: list[str] | None = None,
@@ -113,7 +122,7 @@ def daily_pipeline(
     run_id = load.start_run(engine, "raw" if from_raw else "api")
     inserted = updated = 0
     status, error = "failed", "interrupted"
-    dbt_summary = "skipped"
+    dbt_summary = forecast_summary = "skipped"
     try:
         rows: list[DailyPrice] = []
         for i, coin_id in enumerate(coins):
@@ -129,6 +138,7 @@ def daily_pipeline(
         check_table(engine, run_id, coins, today)  # raises -> run marked failed
         if run_dbt:
             dbt_summary = dbt_build(engine, run_id)
+            forecast_summary = forecast_volatility(engine, run_id)
         status, error = "success", None
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
@@ -137,7 +147,14 @@ def daily_pipeline(
         load.finish_run(engine, run_id, status, inserted, updated, error)
 
     print(f"run {run_id}: inserted {inserted}, updated {updated}, dbt: {dbt_summary}")
-    return {"run_id": run_id, "inserted": inserted, "updated": updated, "dbt": dbt_summary}
+    print(f"forecast: {forecast_summary}")
+    return {
+        "run_id": run_id,
+        "inserted": inserted,
+        "updated": updated,
+        "dbt": dbt_summary,
+        "forecast": forecast_summary,
+    }
 
 
 def main() -> None:

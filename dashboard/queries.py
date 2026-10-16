@@ -97,6 +97,47 @@ def total_rows(engine: Engine) -> int:
         return conn.execute(text(f"SELECT COUNT(*) FROM {raw}.raw_daily_prices")).scalar_one()
 
 
+def _exists(engine: Engine, table: str) -> bool:
+    """The forecast tables only appear after the first forecast run: don't crash before then."""
+    with engine.connect() as conn:
+        return conn.execute(text("SELECT to_regclass(:t)"), {"t": table}).scalar() is not None
+
+
+def forecasts(engine: Engine) -> pd.DataFrame:
+    """One forecast per coin per day: the live one if there is one, else the backtest one.
+
+    Backtest = what the model would have said (walk-forward test). Live = what it really
+    said on that morning, written once and never changed.
+    """
+    raw, _ = _schemas()
+    if not _exists(engine, f"{raw}.predictions"):
+        return pd.DataFrame(
+            columns=["symbol", "made_on", "kind", "predicted_vol", "naive_vol", "actual_vol"]
+        )
+    sql = f"""
+        SELECT DISTINCT ON (p.coin_id, p.made_on)
+               c.symbol, p.made_on, p.kind, p.predicted_vol, p.naive_vol, p.actual_vol
+        FROM {raw}.predictions p
+        JOIN {raw}.coins c USING (coin_id)
+        ORDER BY p.coin_id, p.made_on, p.kind = 'live' DESC
+    """
+    return pd.read_sql(text(sql), engine, parse_dates=["made_on"])
+
+
+def latest_evaluation(engine: Engine) -> pd.DataFrame:
+    """Model vs naive scores from the most recent walk-forward test."""
+    raw, _ = _schemas()
+    if not _exists(engine, f"{raw}.forecast_evaluations"):
+        return pd.DataFrame(columns=["model", "mae", "vs_naive", "n", "evaluated_at"])
+    sql = f"""
+        SELECT model, mae, vs_naive, n, evaluated_at
+        FROM {raw}.forecast_evaluations
+        WHERE evaluated_at = (SELECT MAX(evaluated_at) FROM {raw}.forecast_evaluations)
+        ORDER BY mae
+    """
+    return pd.read_sql(text(sql), engine)
+
+
 def rebased(metrics: pd.DataFrame, days: int) -> pd.DataFrame:
     """Each coin's price over the last `days` days, scaled so the first day = 100.
 
